@@ -176,12 +176,12 @@ def main():
     
     if args.verbose:
         os.environ["verbose"] = "1"
-        
+    
     if args.tasks is None:
         task_names = ALL_TASKS
     else:
         task_names = pattern_match(args.tasks.split(","), ALL_TASKS)
-
+    
     accelerator = Accelerator()
     if accelerator.is_main_process:
         print(f"Selected Tasks: {task_names}")
@@ -301,6 +301,11 @@ def main():
                             print("references were saved")
             else:
                 results[task] = evaluator.evaluate(task)
+                
+                if len(task_names) == 1:
+                    wandb.log(results[task])
+                else:
+                    wandb.log({f"{task}_{k}": v for  k, v in results[task].items()})
 
     results["config"] = {
         "model": args.model,
