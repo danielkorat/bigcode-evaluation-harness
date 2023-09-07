@@ -46,6 +46,11 @@ def parse_args():
         help="Model to evaluate, provide a repo name in Hugging Face hub or a local path",
     )
     parser.add_argument(
+        "--assistant_model",
+        default=None,
+        help="Model to use for assisted generation, provide a repo name in Hugging Face hub or a local path",
+    )
+    parser.add_argument(
         "--revision",
         default=None,
         help="Model revision to use",
@@ -197,12 +202,19 @@ def main():
     wandb.define_metric("num_new_tokens", summary="mean")
     ###################
     
+    assistant_model = None
+    if args.assistant_model is not  None:
+        assistant_model = AutoModelForCausalLM.from_pretrained(
+            args.assistant_model, 
+            device_map={"": accelerator.process_index},
+            )
+        
     results = {}
     if args.load_generations_path:
         # here we don't generate code but only evaluate previously computed generations
         if accelerator.is_main_process:
             print("evaluation only mode")
-        evaluator = Evaluator(accelerator, None, None, args)
+        evaluator = Evaluator(accelerator, None, None, args, assistant_model)
         for task in task_names:
             results[task] = evaluator.evaluate(task)
 
@@ -284,7 +296,7 @@ def main():
                 raise ValueError("No eos_token or bos_token found")
         tokenizer.pad_token = tokenizer.eos_token
 
-        evaluator = Evaluator(accelerator, model, tokenizer, args)
+        evaluator = Evaluator(accelerator, model, tokenizer, args, assistant_model)
 
         for task in task_names:
             if args.generation_only:

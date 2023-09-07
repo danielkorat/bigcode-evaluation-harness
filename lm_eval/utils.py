@@ -243,7 +243,7 @@ def complete_code(
                 generated_tokens = model.generate(
                     input_ids=inputs,
                     num_return_sequences=batch_size,
-                    **gen_kwargs,
+                    **gen_kwargs
                 )
             
             torch.cuda.synchronize()
