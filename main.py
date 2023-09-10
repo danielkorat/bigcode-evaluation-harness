@@ -18,7 +18,7 @@ import sys
 from os.path import join, dirname
 
 sys.path.insert(0, join(dirname(__file__), "..",))
-from modeling_gpt_bigcode_sd import GPTBigCodeForCausalLMSkipDecode
+from modeling_gpt_bigcode_ee import GPTBigCodeForCausalLMSkipDecode
 
 class MultiChoice:
     def __init__(self, choices):
