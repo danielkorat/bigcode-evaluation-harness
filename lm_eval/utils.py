@@ -1,6 +1,6 @@
 import math
 import os
-from time import perf_counter_ns
+from time import perf_counter
 import warnings
 from collections import defaultdict
 
@@ -230,7 +230,7 @@ def complete_code(
                 gen_kwargs["prompt_size"] = inputs.shape[1]
             
             torch.cuda.synchronize()
-            start = perf_counter_ns()
+            start = perf_counter()
             
             if is_wrapped:
                 # 8bit and 4bit models are wrapped in accelerator
@@ -247,8 +247,7 @@ def complete_code(
                 )
             
             torch.cuda.synchronize()
-            nano_secs = perf_counter_ns() - start    
-            gen_time_ms = nano_secs / 1e6
+            gen_time_ms = perf_counter() - start    
             num_new_tokens = len(generated_tokens[0]) - len(inputs[0]) # This works only for batch_size=1
             wandb.log({"num_new_tokens": num_new_tokens, "generation_time_ms": gen_time_ms})
         

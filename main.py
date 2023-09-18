@@ -9,7 +9,7 @@ import transformers
 from accelerate import Accelerator
 from transformers import AutoModelForCausalLM, AutoTokenizer, HfArgumentParser, AutoConfig
 import pandas as pd
-
+from peft import PeftModel
 from lm_eval.arguments import EvalArguments
 from lm_eval.evaluator import Evaluator
 from lm_eval.tasks import ALL_TASKS
@@ -18,7 +18,7 @@ import sys
 from os.path import join, dirname
 
 sys.path.insert(0, join(dirname(__file__), "..",))
-from modeling_gpt_bigcode_ee import GPTBigCodeForCausalLMSkipDecode
+from modeling_gpt_bigcode_ee import GPTBigCodeForCausalLMEarlyExit
 
 class MultiChoice:
     def __init__(self, choices):
@@ -155,6 +155,8 @@ def parse_args():
     )
 
     parser.add_argument('-sd', "--do_skip_decode", action="store_true")
+
+    parser.add_argument("--do_skip_decode_remove_top", action="store_true")
     parser.add_argument("--max_exit_layer", type=int)
     parser.add_argument("--min_exit_layer", type=int)
     parser.add_argument('-wl', "--num_skip_decode_warmup_layers", type=int)
@@ -230,12 +232,27 @@ def main():
                 f"Non valid precision {args.precision}, choose from: fp16, fp32, bf16"
             )
         
-        config = AutoConfig.from_pretrained(args.model)
+        adapter_model_name = None
+        adapter_config_path = f"{args.model}/adapter_config.json"
+
+        if os.path.exists(adapter_config_path):
+            with open(adapter_config_path) as f:
+                model_name = json.load(f)["base_model_name_or_path"]
+            adapter_model_name = args.model
+        else:
+            model_name = args.model
         
+        print(f"model_name: {model_name}")
+        config = AutoConfig.from_pretrained(model_name)
+
         if args.do_skip_decode:
             os.environ["do_skip_decode"] = "1"
-            model_cls = GPTBigCodeForCausalLMSkipDecode
+            model_cls = GPTBigCodeForCausalLMEarlyExit
             config.do_skip_decode = True
+            
+            if args.do_skip_decode_remove_top:
+                config.do_skip_decode_remove_top = True
+                
             config.max_exit_layer = args.max_exit_layer
             config.min_exit_layer = args.min_exit_layer
             config.num_skip_decode_warmup_layers = args.num_skip_decode_warmup_layers
@@ -247,8 +264,8 @@ def main():
             print("Loading model in 8bit")
             current_device = accelerator.process_index
             # the model needs to fit in one GPU``
-            model = model_cls.from_pretrained(
-                args.model,
+            base_model = model_cls.from_pretrained(
+                model_name,
                 revision=args.revision,
                 load_in_8bit=args.load_in_8bit,
                 trust_remote_code=args.trust_remote_code,
@@ -260,8 +277,8 @@ def main():
             print("Loading model in 4bit")
             current_device = accelerator.process_index
             # the model needs to fit in one GPU
-            model = model_cls.from_pretrained(
-                args.model,
+            base_model = model_cls.from_pretrained(
+                model_name,
                 revision=args.revision,
                 load_in_4bit=args.load_in_4bit,
                 trust_remote_code=args.trust_remote_code,
@@ -271,8 +288,8 @@ def main():
             )
         else:
             print(f"Loading model in {args.precision}")
-            model = model_cls.from_pretrained(
-                args.model,
+            base_model = model_cls.from_pretrained(
+                model_name,
                 revision=args.revision,
                 torch_dtype=dict_precisions[args.precision],
                 trust_remote_code=args.trust_remote_code,
@@ -281,7 +298,7 @@ def main():
             )
 
         tokenizer = AutoTokenizer.from_pretrained(
-            args.model,
+            model_name,
             revision=args.revision,
             trust_remote_code=args.trust_remote_code,
             use_auth_token=args.use_auth_token,
@@ -296,6 +313,12 @@ def main():
                 raise ValueError("No eos_token or bos_token found")
         tokenizer.pad_token = tokenizer.eos_token
 
+        if adapter_model_name is not None:
+            model = PeftModel.from_pretrained(base_model, adapter_model_name)
+            model = model.merge_and_unload()
+        else:
+            model = base_model
+            
         evaluator = Evaluator(accelerator, model, tokenizer, args, assistant_model)
 
         for task in task_names:
