@@ -35,7 +35,7 @@ class EndOfFunctionCriteria(StoppingCriteria):
         return all(done)
 
 
-def parallel_generations(task, dataset, accelerator, model, tokenizer, n_tasks, args):
+def parallel_generations(task, dataset, accelerator, model, tokenizer, n_tasks, args, assistant_model):
     if args.load_generations_path:
         # load generated code
         with open(args.load_generations_path) as fp:
@@ -55,6 +55,7 @@ def parallel_generations(task, dataset, accelerator, model, tokenizer, n_tasks, 
         "top_p": args.top_p,
         "top_k": args.top_k,
         "max_length": args.max_length_generation,
+        "assistant_model": assistant_model
     }
     if task.stop_words:
         if tokenizer.eos_token:

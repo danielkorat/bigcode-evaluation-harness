@@ -25,7 +25,7 @@ Once you have read this disclaimer and taken appropriate precautions, set the ar
 
 
 class Evaluator:
-    def __init__(self, accelerator, model, tokenizer, args):
+    def __init__(self, accelerator, model, tokenizer, args, assistant_model):
         self.accelerator = accelerator
         self.model = model
         self.tokenizer = tokenizer
@@ -36,6 +36,8 @@ class Evaluator:
 
         # code evaluation permission
         self.allow_code_execution = args.allow_code_execution
+        
+        self.assistant_model = assistant_model
 
     def generate_text(self, task_name):
         task = tasks.get_task(task_name)
@@ -50,6 +52,7 @@ class Evaluator:
             self.tokenizer,
             n_tasks=n_tasks,
             args=self.args,
+            assistant_model=self.assistant_model
         )
         references = [task.get_reference(dataset[i]) for i in range(n_tasks)]
         if len(generations[0]) > self.args.n_samples:
